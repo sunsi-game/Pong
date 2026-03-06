@@ -6,7 +6,7 @@
 // 크기가 알아서 변경되는 배열.
 #include <vector>
 
-namespace KhyMario
+namespace KhyPong
 {
 	// 전방 선언.
 	class Actor;

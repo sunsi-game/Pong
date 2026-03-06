@@ -2,7 +2,7 @@
 #include "Level/Level.h"
 #include "Game/GameManager.h"
 
-using namespace KhyMario;
+using namespace KhyPong;
 
 class BaseLevel : public Level
 {

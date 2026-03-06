@@ -3,7 +3,7 @@
 #include "Math/Vector2.h"
 #include <Windows.h>
 
-namespace KhyMario
+namespace KhyPong
 {
 	class ScreenBuffer
 	{

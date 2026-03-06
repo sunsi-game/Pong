@@ -4,7 +4,7 @@
 #include "Math/Vector2.h"
 #include "Math/Color.h"
 
-namespace KhyMario
+namespace KhyPong
 {
 	// 전방 선언.
 	class Level;
@@ -29,7 +29,7 @@ namespace KhyMario
 
 		void SetRenderChar(char c);
 		void SetRenderChar(const char* str) ;
-		void SetColor(KhyMario::Color newcolor);
+		void SetColor(KhyPong::Color newcolor);
 
 		// 삭제 요청 함수.
 		void Destroy();

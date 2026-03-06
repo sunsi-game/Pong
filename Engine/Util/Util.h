@@ -4,7 +4,7 @@
 #include "Math/Color.h"
 #include <time.h>
 
-using namespace KhyMario;
+using namespace KhyPong;
 
 // 헬퍼(Helper) 기능 제공.
 namespace Util

@@ -4,12 +4,9 @@
 
 #include "Level/GameLevel.h"
 #include "Level/MenuLevel.h"
-#include "Level/EndingLevel.h"
-#include "Level/ClearEndingLevel.h"
-#include "Level/GameLevel.h"
 
 
-using namespace KhyMario;
+using namespace KhyPong;
 
 GameManager& GameManager::Get()
 {
@@ -61,19 +58,19 @@ void GameManager::Tick()
         return;
     }
 
-    if (requestEnding)
-    {
-        requestEnding = false;
-        Engine::Get().SetNewLevel(new EndingLevel());
-        return;
-    }
+    //if (requestEnding)
+    //{
+    //    requestEnding = false;
+    //    Engine::Get().SetNewLevel(new EndingLevel());
+    //    return;
+    //}
 
-    if (requestClearEnding)
-    {
-        requestClearEnding = false;
-        Engine::Get().SetNewLevel(new ClearEndingLevel());
-        return;
-    }
+    //if (requestClearEnding)
+    //{
+    //    requestClearEnding = false;
+    //    Engine::Get().SetNewLevel(new ClearEndingLevel());
+    //    return;
+    //}
 
     if (requestReload)
     {

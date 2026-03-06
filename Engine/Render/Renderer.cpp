@@ -2,7 +2,7 @@
 #include "ScreenBuffer.h"
 #include "Util/Util.h"
 
-namespace KhyMario
+namespace KhyPong
 {
 	Renderer::Frame::Frame(int bufferCount)
 	{

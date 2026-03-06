@@ -1,7 +1,7 @@
 #include "Level.h"
 #include "Actor/Actor.h"
 
-namespace KhyMario
+namespace KhyPong
 {
 	Level::Level()
 	{

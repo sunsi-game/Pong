@@ -3,7 +3,7 @@
 #include "Common/Common.h"
 #include "Math/Vector2.h"
 
-namespace KhyMario
+namespace KhyPong
 {
 	class WANTED_API Input
 	{

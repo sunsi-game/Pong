@@ -6,7 +6,7 @@
 #include <iostream>
 #include <Windows.h>
 
-namespace KhyMario
+namespace KhyPong
 {
 	Actor::Actor(
 		const char* image,
@@ -61,7 +61,7 @@ namespace KhyMario
 		ChangeImage(str);
 	}
 
-	void Actor::SetColor(KhyMario::Color newcolor)
+	void Actor::SetColor(KhyPong::Color newcolor)
 	{
 		color = newcolor;
 	}

@@ -2,7 +2,7 @@
 
 #include "Common/Common.h"
 
-namespace KhyMario
+namespace KhyPong
 {
 	// 전방 선언.
 	class Input;

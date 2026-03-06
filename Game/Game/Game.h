@@ -3,7 +3,7 @@
 #include "Engine/Engine.h"
 #include <vector>
 
-using namespace KhyMario;
+using namespace KhyPong;
 
 // 레벨 관리에 사용할 열겨헝.
 enum class State

@@ -28,12 +28,12 @@ public:
 private :
 	GameManager() = default;
 
-	void LoadLevelSafe(KhyMario::Level* levelName);
+	void LoadLevelSafe(KhyPong::Level* levelName);
 
 private :
 	int lives = 3;
 	bool requestClearEnding = false;
-	std::function<KhyMario::Level* ()> makeStageLevel; // 재시작용
+	std::function<KhyPong::Level* ()> makeStageLevel; // 재시작용
 
 	std::string currentLevel;     // 현재 플레이 중인 스테이지 레벨명.
 	std::string stageLevel;       // 게임 시작 스테이지 레벨명.

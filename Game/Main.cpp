@@ -2,7 +2,7 @@
 #include "Engine/Engine.h"
 #include "Game/Game.h"
 
-using namespace KhyMario;
+using namespace KhyPong;
 
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>

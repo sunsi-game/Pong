@@ -5,7 +5,7 @@
 // 상속 관계에 있는 클래스 간의
 // 동적(실행중에) 형변환을 하기 위해 사용하는 클래스.
 // RunTime-Type-Information.
-namespace KhyMario
+namespace KhyPong
 {
 	// 커스텀 RTTI를 제공하는 클래스의 최상위 클래스.
 	// C#의 Object, Java의 object, 

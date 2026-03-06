@@ -3,7 +3,7 @@
 #include "Common/Common.h"
 #include <Windows.h>
 
-namespace KhyMario
+namespace KhyPong
 {
 	class WANTED_API Vector2
 	{

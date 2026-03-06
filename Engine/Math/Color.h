@@ -3,7 +3,7 @@
 #include "Common/Common.h"
 #include <Windows.h>
 
-namespace KhyMario
+namespace KhyPong
 {
 	// 콘솔에 텍스트 색상 등을 지정할 때 사용할
 	// 색상 열거형.

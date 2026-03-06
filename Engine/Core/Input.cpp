@@ -1,7 +1,7 @@
 #include "Core/Input.h"
 #include <Windows.h>
 
-namespace KhyMario
+namespace KhyPong
 {
     Input* Input::instance = nullptr;
 

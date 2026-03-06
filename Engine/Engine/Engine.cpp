@@ -7,7 +7,7 @@
 #include <iostream>
 #include <Windows.h>
 
-namespace KhyMario
+namespace KhyPong
 {
 	// 전역 변수 초기화.
 	Engine* Engine::instance = nullptr;

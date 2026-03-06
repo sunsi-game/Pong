@@ -2,7 +2,7 @@
 #include <iostream>
 #include "Renderer.h"
 
-namespace KhyMario
+namespace KhyPong
 {
 	ScreenBuffer::ScreenBuffer(const Vector2& screenSize)
 		: screenSize(screenSize)

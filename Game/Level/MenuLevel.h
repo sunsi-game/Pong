@@ -4,7 +4,7 @@
 #include "Math/Color.h"
 #include <vector>
 
-using namespace KhyMario;
+using namespace KhyPong;
 
 // 메뉴 아이템 구조체.
 struct MenuItem

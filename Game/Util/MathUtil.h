@@ -1,6 +1,6 @@
 #pragma once
 
-namespace KhyMario
+namespace KhyPong
 {
     namespace MathUtil
     {
