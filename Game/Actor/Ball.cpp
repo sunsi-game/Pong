@@ -2,9 +2,14 @@
 #include <algorithm>
 #include <cmath>
 
-static float Clamp(float v, float min, float max)
+static float Clamp(float v, float a, float b)
 {
-	return std::max(min, std::min(max, v));
+	return (v < a) ? a : (v > b) ? b : v;
+}
+
+static float Sqrt(float v)
+{
+    return std::sqrt(v);
 }
 
 void Ball::Reset(const Float2& p, const Float2& dir, float speed)
@@ -15,6 +20,15 @@ void Ball::Reset(const Float2& p, const Float2& dir, float speed)
 
 void Ball::Tick(float deltaTime, const TileMap& map)
 {
+    // 맵이 아직 로드/초기화 안 된 상태면 타일 충돌 스킵
+    if (map.GetWidth() <= 0 || map.GetHeight() <= 0)
+    {
+        // 임시로 월드 반사(혹은 그냥 이동만) - Step A처럼 처리해도 됨
+        pos.x += vel.x * deltaTime;
+        pos.y += vel.y * deltaTime;
+        return;
+    }
+
 	Float2 old = pos;
 
 	pos.x += vel.x * deltaTime;
@@ -29,6 +43,30 @@ void Ball::Tick(float deltaTime, const TileMap& map)
 	{
 		vel.x *= props.speedMul;
 		vel.y *= props.speedMul;
+	}
+
+}
+
+void Ball::Tick(float deltaTime, float worldW, float worldH)
+{
+    prevPos = pos;
+
+	pos.x += (vel.x * deltaTime);
+	pos.y += (vel.y * deltaTime);
+
+    // 위, 아래 벽 반사.
+	const float top = 0.0f + radius;
+	const float bottom = (worldH - 1.0f) - radius;
+
+    if (pos.y < top)
+    {
+        pos.y = top;
+        vel.y = -vel.y;
+    }
+    else if (pos.y > bottom)
+    {
+        pos.y = bottom;
+        vel.y = -vel.y;
 	}
 }
 
@@ -86,23 +124,53 @@ void Ball::ResolveTileCollision(const TileMap& map, const Float2& oldPos)
 
 void Ball::ResolvePaddleCollision(const Paddle& p)
 {
-    // 패들은 AABB, 공은 원(여기서는 원을 AABB로 대충)
     float pMinX = p.GetPos().x - p.GetHalfW();
     float pMaxX = p.GetPos().x + p.GetHalfW();
     float pMinY = p.GetPos().y - p.GetHalfH();
     float pMaxY = p.GetPos().y + p.GetHalfH();
 
-    float bMinX = pos.x - radius;
-    float bMaxX = pos.x + radius;
-    float bMinY = pos.y - radius;
-    float bMaxY = pos.y + radius;
-
-    if (!AABBOverlap(bMinX, bMinY, bMaxX, bMaxY, pMinX, pMinY, pMaxX, pMaxY))
+    // y 범위 먼저 체크(공 중심 기준)
+    if (pos.y < pMinY - radius || pos.y > pMaxY + radius)
         return;
 
-    // x 반전 + y 방향 살짝 꺾기(맞은 위치에 따라)
-    vel.x = -vel.x;
+    // 왼쪽 패들 쪽으로 가는 중: 오른쪽 면(pMaxX)을 "통과"했는지
+    if (vel.x < 0.0f)
+    {
+        bool wasRight = (prevPos.x - radius) > pMaxX;
+        bool nowLeftOrInside = (pos.x - radius) <= pMaxX;
 
-    float offset = (pos.y - p.GetPos().y) / p.GetHalfH(); // -1~+1
-    vel.y += offset * 40.0f;
+        if (wasRight && nowLeftOrInside)
+        {
+            // 충돌 처리
+            pos.x = pMaxX + radius;
+
+            float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+            float offset = (pos.y - p.GetPos().y) / p.GetHalfH();
+            offset = Clamp(offset, -1.0f, 1.0f);
+
+            float angle = offset * (60.0f * 3.141592f / 180.0f);
+            vel.x = +std::cos(angle) * speed;
+            vel.y = std::sin(angle) * speed;
+        }
+    }
+    // 오른쪽 패들 쪽으로 가는 중: 왼쪽 면(pMinX)을 통과했는지
+    else if (vel.x > 0.0f)
+    {
+        bool wasLeft = (prevPos.x + radius) < pMinX;
+        bool nowRightOrInside = (pos.x + radius) >= pMinX;
+
+        if (wasLeft && nowRightOrInside)
+        {
+            pos.x = pMinX - radius;
+
+            float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+            float offset = (pos.y - p.GetPos().y) / p.GetHalfH();
+            offset = Clamp(offset, -1.0f, 1.0f);
+
+            float angle = offset * (60.0f * 3.141592f / 180.0f);
+            vel.x = -std::cos(angle) * speed;
+            vel.y = std::sin(angle) * speed;
+        }
+    }
+
 }

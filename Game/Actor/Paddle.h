@@ -8,6 +8,7 @@ public :
 	
 	inline void SetMoveInput(float v) { moveInput = v; }
 	void Tick(float deltaTime, float worldH);
+	void Draw();
 
 	inline const Float2& GetPos() const { return pos; }
 
@@ -18,10 +19,10 @@ private :
 	Float2 pos{ 0,0 };
 	float moveInput = 0.0f;
 
-	float speed = 180.0f;
+	float speed = 45.0f;
 	float velY = 0.0f;
 
-	float halfW = 3.0f;
-	float halfH = 18.0f;
+	float halfW = 0.1f;
+	float halfH = 1.0f;
 };
 

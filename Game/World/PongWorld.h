@@ -26,9 +26,23 @@ namespace KhyPong
 	private:
 		void HandleInput(float deltaTime);
 		void UpdateGameplay(float deltaTime);
-		void HandleSecoreAndReset();
+		void HandleSecoreAndReset(float deltaTime);
+		void DrawDebug();
+		void DrawZonesDebug();
+		void ApplyZonesToBall(float deltaTime);
+
 
 	private:
+
+		struct ZoneRect
+		{
+			int x0, y0, x1, y1; // 포함 범위
+			float speedMul;     // 0.8 슬로우 / 1.2 스피드
+			char debugChar;     // 표시용
+		};
+
+		std::vector<ZoneRect> zones;
+
 		TileMap map;
 		Ball ball;
 		Paddle left;
@@ -37,6 +51,9 @@ namespace KhyPong
 		int leftScore = 0;
 		int rightScore = 0;
 		int scoreToWin = 5;
+
+		// 누가 서브를 할지.
+		int serveDir = 1; // 1이면 오른쪽으로, -1이면 왼쪽으로 서브.
 
 		// AI (오른쪽 패들 예시).
 		std::unique_ptr<IPaddleAI> rightAI;
@@ -48,6 +65,17 @@ namespace KhyPong
 		// 월드 크기 (픽셀 기준).
 		float worldW = 0.0f;
 		float worldH = 0.0f;
+
+		float serveTimer = 0.0f; // 서브 타이머 (공이 잠시 멈춰있는 시간).
+		bool waitingServe = false; // 서브 대기 상태 여부.
+
+		bool matchEnded = false;
+		float endTimer = 0.0f;
+		bool leftWon = false; // true면 왼쪽 승, false면 오른쪽 승
+
+		bool dbgGrid = false;      // F2: 타일 그리드
+		bool dbgBallBox = false;   // F4: 공 AABB/검사 영역
+		bool dbgZones = false;     // F3: 존 표시(스피드/슬로우)
 	};
 }
 

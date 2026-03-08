@@ -11,7 +11,7 @@
 
 GameLevel::GameLevel()
 {
-	world = new PongWorld();
+	world = new KhyPong::PongWorld();
 }
 
 GameLevel::~GameLevel()
@@ -31,6 +31,9 @@ void GameLevel::BeginPlay()
 
 void GameLevel::Tick(float deltaTime)
 {
+	// GameManager 플래그 처리하고 싶으면 여기서 Tick 호출.
+	GameManager::Get().Tick();
+
 	// 입력, 업데이트, 충돌, AI 한 번에 처리.
 	world->Tick(deltaTime);
 }
