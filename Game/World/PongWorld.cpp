@@ -53,28 +53,49 @@ namespace KhyPong
 
     void PongWorld::HandleInput(float dt)
     {
-        // ====== 왼쪽 패들: 플레이어 입력 ======
-        // 아래는 네 Input API 이름에 맞춰서 바꿔줘.
-        // 예) input->GetKey('W') / GetKeyDown / IsPressed 등
-        Input* input = Engine::Get().GetInput(); // 엔진에 GetInput() 없으면 너 코드에 맞게
-
+        // 왼쪽 패들 : 플레이어 입력.
         float move = 0.0f;
 
-        // 예시: W/S로 이동
-        // if (input->GetKey('W')) move -= 1.0f;
-        // if (input->GetKey('S')) move += 1.0f;
+        // 위로.
+        if (Input::Get().GetKey('W') || Input::Get().GetKey(VK_UP))
+        {
+            move -= 1.0f;
+        }
+
+        // 아래로.
+        if (Input::Get().GetKey('S') || Input::Get().GetKey(VK_DOWN))
+        {
+            move += 1.0f;
+        }
 
         left.SetMoveInput(move);
 
-        // ====== 오른쪽 패들: AI ======
+        // 오른쪽 패들 : AI.
         if (rightAI)
         {
             PaddleInput aiIn = rightAI->Update(dt, map, right.GetPos(), ball.GetPos(), ball.GetVel());
             right.SetMoveInput(aiIn.moveY);
         }
 
-        // (옵션) 스페이스로 리셋
-        // if (input->GetKeyDown(VK_SPACE)) ResetRound();
+        // 라운드 리셋.
+        if (Input::Get().GetKeyDown(VK_SPACE))
+        {
+            ResetRound();
+        }
+
+        // F1 눌러서 A* 전환.
+        if (Input::Get().GetKeyDown(VK_F1))
+        {
+            useAStarAI = !useAStarAI;
+            if (useAStarAI)
+            {
+                rightAI = std::make_unique<AStarPositioningAI>();
+            }
+            else
+            {
+                rightAI = std::make_unique<SimpleTrackerAI>();
+            }
+        }
     }
 
     void PongWorld::UpdateGameplay(float dt)
@@ -91,7 +112,8 @@ namespace KhyPong
         ball.ResolvePaddleCollision(right);
     }
 
-    void PongWorld::HandleScoreAndReset()
+    
+    void PongWorld::HandleSecoreAndReset()
     {
         // 골 판정: 좌/우 바깥으로 나가면 점수
         if (ball.GetPos().x < 0.0f)

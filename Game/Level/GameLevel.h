@@ -6,7 +6,8 @@
 using namespace KhyPong;
 
 //전방 선언.
-class PongWorld;
+namespace KhyPong{ class PongWorld; }
+
 
 class GameLevel : public BaseLevel
 {
