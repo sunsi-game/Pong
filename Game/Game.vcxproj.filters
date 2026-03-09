@@ -45,13 +45,10 @@
     <ClCompile Include="Actor\Paddle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="AI\SimpleTrackerAI.cpp">
+    <ClCompile Include="Common\Types.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="AI\AStarPositioningAI.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Common\Types.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

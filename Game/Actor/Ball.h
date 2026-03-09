@@ -16,6 +16,7 @@ public :
 	void ResolvePaddleCollision(const Paddle& paddle);
 
 	inline void SetVel(const Float2& newVel) { vel = newVel; }
+	inline int GetGimmickLoopStreak() const { return gimmickLoopStreak;  }
 
 private :
 	Float2 prevPos{ 0,0 };
@@ -23,8 +24,13 @@ private :
 	Float2 vel{ 0,0 };
 	float radius = 2.0f;
 	Int2 prevTile{ -999, -999 };
+	int wallBounceStreak = 0; // 연속 벽 반사 횟수.
+	int gimmickLoopStreak = 0;
+
 
 private : 
 	void ResolveTileCollision(const TileMap& map, const Float2& oldPos);
+
+
 };
 

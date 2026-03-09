@@ -14,15 +14,16 @@ public :
 
 	inline float GetHalfW() const { return halfW; }
 	inline float GetHalfH() const { return halfH; }
+	inline float GetVelY() const { return velY; }
 
 private :
 	Float2 pos{ 0,0 };
 	float moveInput = 0.0f;
 
-	float speed = 45.0f;
+	float speed = 40.0f;
 	float velY = 0.0f;
 
-	float halfW = 0.1f;
+	float halfW = 0.2f;
 	float halfH = 1.0f;
 };
 

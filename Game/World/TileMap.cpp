@@ -54,9 +54,14 @@ bool TileMap::LoadFromFile(const char* filename, int width, int height)
 
 TileId TileMap::GetTile(int tx, int ty) const
 {
-	// 바깥은 벽 취급 (퐁 벽 역할).
-	if (tx < 0 || tx >= width || ty < 0 || ty >= height)
+	// 위/아래 바깥은 벽
+	if (ty < 0 || ty >= height)
 		return TileId::SolidWall;
+
+	// 좌/우 바깥은 비움(득점 처리용)
+	if (tx < 0 || tx >= width)
+		return TileId::Empty;
+
 	return tiles[Index(tx, ty)];
 }
 
@@ -78,22 +83,37 @@ TileProps TileMap::GetProps(TileId id) const
 			p.extraCost = 100; // A*에서 사실상 못 지나가는 타일.
 			break;
 		case TileId::SoftWall:
-			p.isSolid = true;
+			p.isSolid = false;
 			p.speedMul = 0.5f;
 			p.restitution = 1.0f;
 			p.extraCost = 10; // A*에서 높은 비용.
 			break;
-		case TileId::SpeedZone:
+		case TileId::StickyZone:
 			p.isSolid = false;
-			p.speedMul = 1.5f;
+			p.speedMul = 0.94f;
 			p.restitution = 1.0f;
-			p.extraCost = 0;
+			p.extraCost = 2;
 			break;
-		case TileId::SlowZone:
+
+		case TileId::WindRight:
 			p.isSolid = false;
-			p.speedMul = 0.8f;
-			p.restitution = 1.0f;
-			p.extraCost = 0;
+			p.speedMul = 1.0f;
+			p.force = { 6.0f, 0.0f };
+			p.extraCost = 1;
+			break;
+
+		case TileId::WindLeft:
+			p.isSolid = false;
+			p.speedMul = 1.0f;
+			p.force = { -6.0f, 0.0f };
+			p.extraCost = 1;
+			break;
+
+		case TileId::Bumper:
+			p.isSolid = false;
+			p.speedMul = 1.0f;
+			p.restitution = 1.25f;
+			p.extraCost = 20;
 			break;
 		default :
 			break;
@@ -152,58 +172,74 @@ void TileMap::FillTestMap(int w, int h, int uiTopRows)
 	height = h;
 	tiles.assign(width * height, TileId::Empty);
 
-	int playTop = uiTopRows;
-	int playBottom = height - 1;
+	const int playTop = uiTopRows;
+	const int playBottom = height - 1;
+	const int midX = width / 2;
+	const int midY = (playTop + playBottom) / 2;
 
-	// 외곽 벽
+	auto SafeSet = [&](int x, int y, TileId id)
+		{
+			if (x >= 0 && x < width && y >= 0 && y < height)
+				tiles[Index(x, y)] = id;
+		};
+
+	// =========================
+	// 1) 위 / 아래 벽
+	// =========================
 	for (int x = 0; x < width; ++x)
 	{
-		tiles[Index(x, playTop)] = TileId::SolidWall;
-		tiles[Index(x, playBottom)] = TileId::SolidWall;
+		SafeSet(x, playTop, TileId::SolidWall);
+		SafeSet(x, playBottom, TileId::SolidWall);
 	}
 
-	for (int y = playTop; y <= playBottom; ++y)
-	{
-		tiles[Index(0, y)] = TileId::SolidWall;
-		tiles[Index(width - 1, y)] = TileId::SolidWall;
-	}
+	// =========================
+	// 2) 중앙 StickyZone (아주 작게)
+	// =========================
+	for (int y = midY - 1; y <= midY + 1; ++y)
+		for (int x = midX; x <= midX + 1; ++x)
+			SafeSet(x, y, TileId::StickyZone);
 
-	// 중앙 슬로우 존
-	int midX = width / 2;
-	for (int y = playTop + 1; y < playBottom; ++y)
-	{
-		for (int x = midX - 2; x <= midX + 2; ++x)
-		{
-			if (x > 0 && x < width - 1)
-				tiles[Index(x, y)] = TileId::SlowZone;
-		}
-	}
+	// =========================
+	// 3) 좌상단 WindRight 포켓
+	// =========================
+	for (int y = playTop + 3; y <= playTop + 5; ++y)
+		for (int x = 6; x <= 8; ++x)
+			SafeSet(x, y, TileId::WindRight);
 
-	// 왼쪽 스피드 존
-	for (int y = playTop + 2; y < playBottom - 1; ++y)
-	{
-		for (int x = 4; x <= 7; ++x)
-		{
-			if (x > 0 && x < width - 1)
-				tiles[Index(x, y)] = TileId::SpeedZone;
-		}
-	}
+	// =========================
+	// 4) 우하단 WindLeft 포켓
+	// =========================
+	for (int y = playBottom - 5; y <= playBottom - 3; ++y)
+		for (int x = width - 9; x <= width - 7; ++x)
+			SafeSet(x, y, TileId::WindLeft);
 
-	// 오른쪽 스피드 존
-	for (int y = playTop + 2; y < playBottom - 1; ++y)
-	{
-		for (int x = width - 8; x <= width - 5; ++x)
-		{
-			if (x > 0 && x < width - 1)
-				tiles[Index(x, y)] = TileId::SpeedZone;
-		}
-	}
+	// =========================
+	// 5) 우상단 짧은 세로 벽
+	// =========================
+	int wall1X = width - 12;
+	for (int y = playTop + 4; y <= playTop + 6; ++y)
+		SafeSet(wall1X, y, TileId::SolidWall);
 
-	// 내부 테스트 벽
-	int wallX = midX + 8;
-	for (int y = playTop + 5; y < playTop + 10 && y < playBottom; ++y)
-	{
-		if (wallX > 0 && wallX < width - 1)
-			tiles[Index(wallX, y)] = TileId::SolidWall;
-	}
+	// =========================
+	// 6) 좌하단 짧은 세로 벽
+	// =========================
+	int wall2X = 11;
+	for (int y = playBottom - 6; y <= playBottom - 4; ++y)
+		SafeSet(wall2X, y, TileId::SolidWall);
+
+	// =========================
+	// 7) 좌하단 Bumper
+	// =========================
+	SafeSet(midX - 10, midY + 4, TileId::Bumper);
+
+	// =========================
+	// 8) 우상단 Bumper
+	// =========================
+	SafeSet(midX + 8, midY - 4, TileId::Bumper);
+
+	// =========================
+	// 9) 우측 중앙 근처 SoftWall
+	// =========================
+	SafeSet(midX + 9, midY + 1, TileId::SoftWall);
+	SafeSet(midX + 9, midY + 2, TileId::SoftWall);
 }

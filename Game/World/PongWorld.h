@@ -76,6 +76,8 @@ namespace KhyPong
 		bool dbgGrid = false;      // F2: 타일 그리드
 		bool dbgBallBox = false;   // F4: 공 AABB/검사 영역
 		bool dbgZones = false;     // F3: 존 표시(스피드/슬로우)
+
+		bool dbgPath = false; // 경로 표시/
 	};
 }
 

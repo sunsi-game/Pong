@@ -11,9 +11,9 @@
 
 namespace KhyPong
 {
-	bool PongWorld::Init()
-	{
-		// 엔진 설정값 기준으로 월드 사이즈 결정.
+    bool PongWorld::Init()
+    {
+        // 엔진 설정값 기준으로 월드 사이즈 결정.
         // 콘솔 화면 크기 기준으로 월드 크기 잡기 (문자 칸 단위).
         worldW = (float)Engine::Get().GetWidth();
         worldH = (float)Engine::Get().GetHeight();
@@ -33,42 +33,55 @@ namespace KhyPong
 
         map.FillTestMap(mapW, mapH, uiTopRows);
 
-		// 패들 초기화.
-		left.Reset({ 2.0f, worldH * 0.5f});
-		right.Reset({ worldW - 3.0f, worldH * 0.5f });
+        // 패들 초기화.
+        left.Reset({ 2.0f, worldH * 0.5f });
+        right.Reset({ worldW - 3.0f, worldH * 0.5f });
 
-		// AI 선택.
-		if (useAStarAI)
-			rightAI = std::make_unique<AStarPositioningAI>();
-		else
-			rightAI = std::make_unique<SimpleTrackerAI>();
+        // AI 선택.
+        if (useAStarAI)
+            rightAI = std::make_unique<AStarPositioningAI>();
+        else
+            rightAI = std::make_unique<SimpleTrackerAI>();
 
-		return true;
-	}
+        return true;
+    }
 
-	inline void PongWorld::ResetRound()
-	{
-		// 공 중앙 스폰.
-		Float2 center{ worldW * 0.5f, worldH * 0.5f };
+    inline void PongWorld::ResetRound()
+    {
+        Float2 center{ worldW * 0.5f, worldH * 0.5f };
 
-		// 오른쪽 위로 쏘는 기본 방향.
-        Float2 dir{ (float)serveDir, 0.35f };
+        // 각도 랜덤 (도 단위)
+        float minAngle = 15.0f;
+        float maxAngle = 45.0f;
 
-		ball.Reset(center, dir, 30.0f);
+        float angleDeg = minAngle +
+            (std::rand() / (float)RAND_MAX) * (maxAngle - minAngle);
+
+        // 위/아래 랜덤
+        if (std::rand() % 2 == 0)
+            angleDeg = -angleDeg;
+
+        float angleRad = angleDeg * 3.14159265f / 180.0f;
+
+        Float2 dir;
+        dir.x = (float)serveDir * std::cos(angleRad);
+        dir.y = std::sin(angleRad);
+
+        ball.Reset(center, dir, 30.0f);
 
         left.Reset({ 2.0f,  worldH * 0.5f });
         right.Reset({ worldW - 3.0f, worldH * 0.5f });
 
-		waitingServe = false;
-		serveTimer = 0.0f;
-	}
+        waitingServe = false;
+        serveTimer = 0.0f;
+    }
 
-	void PongWorld::Tick(float deltaTime)
-	{
-		HandleInput(deltaTime);
-		UpdateGameplay(deltaTime);
-		HandleSecoreAndReset(deltaTime);
-	}
+    void PongWorld::Tick(float deltaTime)
+    {
+        HandleInput(deltaTime);
+        UpdateGameplay(deltaTime);
+        HandleSecoreAndReset(deltaTime);
+    }
 
     void PongWorld::HandleInput(float dt)
     {
@@ -119,11 +132,16 @@ namespace KhyPong
         // F2로 타일 그리드.
         if (Input::Get().GetKeyDown(VK_F2)) dbgGrid = !dbgGrid;
 
-		// F3으로 존 표시.
+        // F3으로 존 표시.
         if (Input::Get().GetKeyDown(VK_F3)) dbgZones = !dbgZones;
 
-		// F4공 AABB/검사 영역.
+        // F4공 AABB/검사 영역.
         if (Input::Get().GetKeyDown(VK_F4)) dbgBallBox = !dbgBallBox;
+
+        if (Input::Get().GetKeyDown('V'))
+        {
+            dbgPath = !dbgPath;
+        }
     }
 
     void PongWorld::UpdateGameplay(float dt)
@@ -134,7 +152,7 @@ namespace KhyPong
         left.Tick(dt, worldH);
         right.Tick(dt, worldH);
 
-        
+
         if (!waitingServe)
         {
             // 공 업데이트 + 타일 충돌
@@ -147,7 +165,7 @@ namespace KhyPong
         }
     }
 
-    
+
     void PongWorld::HandleSecoreAndReset(float dt)
     {
         // 1. 경기 종료 상태
@@ -217,12 +235,15 @@ namespace KhyPong
         sprintf_s(scoreBuf, "L:%d  R:%d", leftScore, rightScore);
         Renderer::Get().Submit(scoreBuf, Vector2(2, 1), Color::White, 50);
 
-        static char dbg[128];
-        Int2 t = map.WorldToTile(ball.GetPos());
-        sprintf_s(dbg, "tile(%d,%d) id=%d vx=%.2f vy=%.2f",
-            t.x, t.y, (int)map.GetTile(t.x, t.y),
-            ball.GetVel().x, ball.GetVel().y);
-        Renderer::Get().Submit(dbg, Vector2(2, 3), Color::White, 200);
+        // 키 옵션 안내.
+        static char optionBuf[160];
+        sprintf_s(optionBuf, "F1: AI %s | F2: Grid %s | F3: Zones %s | F4: BallBox %s | V: Path %s",
+            useAStarAI ? "A*" : "Simple",
+            dbgGrid ? "ON" : "OFF",
+            dbgZones ? "ON" : "OFF",
+            dbgBallBox ? "ON" : "OFF",
+            dbgPath ? "ON" : "OFF");
+        Renderer::Get().Submit(optionBuf, Vector2(2, 2), Color::White, 40);
 
         // 중앙선(점선)
         for (int y = 0; y < (int)worldH; ++y)
@@ -255,7 +276,29 @@ namespace KhyPong
                 Vector2((int)(worldW * 0.5f - 9), (int)(worldH * 0.5f + 1)),
                 Color::White, 100);
         }
-        
+
+        if (dbgPath && useAStarAI && rightAI)
+        {
+            AStarPositioningAI* astar = dynamic_cast<AStarPositioningAI*>(rightAI.get());
+            if (astar)
+            {
+                const auto& path = astar->GetDebugPath();
+
+                for (size_t i = 0; i < path.size(); ++i)
+                {
+                    const Int2& p = path[i];
+
+                    if (i == 0)
+                        Renderer::Get().Submit("S", Vector2(p.x, p.y), Color::Yellow, 20);
+                    else if (i == path.size() - 1)
+                        Renderer::Get().Submit("G", Vector2(p.x, p.y), Color::Red, 20);
+                    else
+                        Renderer::Get().Submit(".", Vector2(p.x, p.y), Color::Yellow, 20);
+                }
+            }
+        }
+
+
         DrawDebug();
     }
 
@@ -318,12 +361,20 @@ namespace KhyPong
 
                 if (id == TileId::SolidWall)
                     Renderer::Get().Submit("#", Vector2(x, y), Color::White, 80);
-                else if (id == TileId::SlowZone)
-                    Renderer::Get().Submit("s", Vector2(x, y), Color::Blue, 80);
-                else if (id == TileId::SpeedZone)
-                    Renderer::Get().Submit("f", Vector2(x, y), Color::Green, 80);
+                else if (id == TileId::SoftWall)
+                    Renderer::Get().Submit("+", Vector2(x, y), Color::Yellow, 80);
+                else if (id == TileId::StickyZone)
+                    Renderer::Get().Submit("~", Vector2(x, y), Color::Blue, 80);
+                else if (id == TileId::WindRight)
+                    Renderer::Get().Submit(">", Vector2(x, y), Color::Green, 80);
+                else if (id == TileId::WindLeft)
+                    Renderer::Get().Submit("<", Vector2(x, y), Color::Green, 80);
+                else if (id == TileId::Bumper)
+                    Renderer::Get().Submit("B", Vector2(x, y), Color::Red, 80);
             }
     }
+    
+
 
     void PongWorld::ApplyZonesToBall(float deltaTime)
     {

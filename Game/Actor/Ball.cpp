@@ -41,12 +41,40 @@ static void EnsureMinHorizontalSpeed(Float2& v, float minXSpeed)
     if (std::abs(v.x) >= minXSpeed)
         return;
 
+
     // 현재 x 방향 유지
     float signX = (v.x < 0.0f) ? -1.0f : 1.0f;
     if (std::abs(v.x) < 0.0001f)
         signX = 1.0f; // 0이면 기본 오른쪽으로
 
+
     v.x = signX * minXSpeed;
+}
+static void BreakGimmickLoop(Float2& v)
+{
+    // 수평 방향은 유지
+    // vy만 크게 흔들어서 루프 탈출
+    if (v.y >= 0.0f) v.y = -std::abs(v.y) - 8.0f;
+    else             v.y = std::abs(v.y) + 8.0f;
+
+    ClampBallSpeed(v, 20.0f, 42.0f);
+    EnsureMinHorizontalSpeed(v, 8.0f);
+}
+
+
+static void ApplyBumperEffect(Float2& vel, const Float2& pos, const Int2& tile)
+{
+    float randomOffset = ((std::rand() % 100) / 100.0f - 0.5f) * 6.0f;
+
+    // 수평 방향은 유지
+    vel.y += randomOffset;
+
+    // 약간 가속
+    vel.x *= 1.08f;
+    vel.y *= 1.08f;
+
+    ClampBallSpeed(vel, 20.0f, 45.0f);
+    EnsureMinHorizontalSpeed(vel, 10.0f);
 }
 
 void Ball::Reset(const Float2& p, const Float2& dir, float speed)
@@ -55,6 +83,7 @@ void Ball::Reset(const Float2& p, const Float2& dir, float speed)
     prevPos = p;
     prevTile = { -999, -999 };
     vel = { dir.x * speed, dir.y * speed };
+	wallBounceStreak = 0;
 }
 
 void Ball::Tick(float deltaTime, const TileMap& map)
@@ -76,20 +105,82 @@ void Ball::Tick(float deltaTime, const TileMap& map)
     ResolveTileCollision(map, old);
 
     Int2 curT = map.WorldToTile(pos);
-    //auto props = map.GetProps(map.GetTile(curT.x, curT.y));
 
     if (curT.x != prevTile.x || curT.y != prevTile.y)
     {
-        auto props = map.GetProps(map.GetTile(curT.x, curT.y));
-        if (!props.isSolid && props.speedMul != 1.0f)
-        {
-            vel.x *= props.speedMul;
-            vel.y *= props.speedMul;
+        TileId id = map.GetTile(curT.x, curT.y);
+        auto props = map.GetProps(id);
 
-            ClampBallSpeed(vel, 18.0f, 40.0f);
-            EnsureMinHorizontalSpeed(vel, 10.0f);
+        bool interactedWithGimmick = false;
+
+        // 1) 범퍼는 통과형 트리거
+        if (id == TileId::Bumper)
+        {
+            ApplyBumperEffect(vel, pos, curT);
+            interactedWithGimmick = true;
         }
+        // 2) 스티키 / 바람 계열
+        else if (!props.isSolid)
+        {
+            if (props.speedMul != 1.0f ||
+                props.force.x != 0.0f ||
+                props.force.y != 0.0f)
+            {
+                vel.x *= props.speedMul;
+                vel.y *= props.speedMul;
+
+                vel.x += props.force.x;
+                vel.y += props.force.y;
+
+                interactedWithGimmick = true;
+            }
+        }
+
+        // 3) 기믹과 상호작용했으면 루프 카운트 증가
+        if (interactedWithGimmick)
+        {
+            gimmickLoopStreak++;
+
+            if (gimmickLoopStreak >= 6)
+            {
+                BreakGimmickLoop(vel);
+                gimmickLoopStreak = 0;
+            }
+        }
+
+        ClampBallSpeed(vel, 18.0f, 40.0f);
+        EnsureMinHorizontalSpeed(vel, 10.0f);
+
         prevTile = curT;
+    }
+
+    // Pong용 상/하 안전벽
+    const float top = 2.0f + radius;
+    const float bottom = (float)(map.GetHeight() - 1) - radius;
+
+    if (pos.y < top)
+    {
+        pos.y = top;
+        vel.y = std::abs(vel.y);
+
+        gimmickLoopStreak++;
+        if (gimmickLoopStreak >= 6)
+        {
+            BreakGimmickLoop(vel);
+            gimmickLoopStreak = 0;
+        }
+    }
+    else if (pos.y > bottom)
+    {
+        pos.y = bottom;
+        vel.y = -std::abs(vel.y);
+
+        gimmickLoopStreak++;
+        if (gimmickLoopStreak >= 6)
+        {
+            BreakGimmickLoop(vel);
+            gimmickLoopStreak = 0;
+        }
     }
 }
 
@@ -156,29 +247,42 @@ void Ball::ResolveTileCollision(const TileMap& map, const Float2& oldPos)
             float dx = std::abs(pos.x - oldPos.x);
             float dy = std::abs(pos.y - oldPos.y);
 
-            // 아주 살짝 밀어내기 위한 값
             const float pushEps = 0.05f;
 
-            if (dx >= dy)
-            {
-                // 좌우 충돌
-                pos.x = oldPos.x;
-                vel.x = -vel.x * props.restitution;
+            // 위 / 아래 바닥 타일인지 확인
+            bool isTopOrBottomWall =
+                (ty == 2) || (ty == map.GetHeight() - 1);
+            // 2는 네 uiTopRows 기준 플레이 시작 벽 줄.
+            // 나중에 uiTopRows를 멤버로 빼면 더 좋음.
 
-                // 반사 방향 쪽으로 살짝 밀기
-                pos.x += (vel.x > 0.0f) ? pushEps : -pushEps;
+            if (isTopOrBottomWall)
+            {
+                // 무조건 y만 반전
+                pos.y = oldPos.y;
+                vel.y = -vel.y * props.restitution;
+                pos.y += (vel.y > 0.0f) ? pushEps : -pushEps;
             }
             else
             {
-                // 상하 충돌
-                pos.y = oldPos.y;
-                vel.y = -vel.y * props.restitution;
-
-                pos.y += (vel.y > 0.0f) ? pushEps : -pushEps;
+                // 나머지 내부 벽은 기존 축 판정 유지
+                if (dx >= dy)
+                {
+                    pos.x = oldPos.x;
+                    vel.x = -vel.x * props.restitution;
+                    pos.x += (vel.x > 0.0f) ? pushEps : -pushEps;
+                }
+                else
+                {
+                    pos.y = oldPos.y;
+                    vel.y = -vel.y * props.restitution;
+                    pos.y += (vel.y > 0.0f) ? pushEps : -pushEps;
+                }
             }
 
+            gimmickLoopStreak++;
+
             ClampBallSpeed(vel, 18.0f, 40.0f);
-            EnsureMinHorizontalSpeed(vel, 10.0f);
+            EnsureMinHorizontalSpeed(vel, 8.0f);
             return;
         }
     }
@@ -210,13 +314,18 @@ void Ball::ResolvePaddleCollision(const Paddle& p)
             float offset = (pos.y - p.GetPos().y) / p.GetHalfH();
             offset = Clamp(offset, -1.0f, 1.0f);
 
-            float angle = offset * (60.0f * 3.141592f / 180.0f);
+            float angle = offset * (50.0f * 3.141592f / 180.0f);
             vel.x = +std::cos(angle) * speed;
             vel.y = std::sin(angle) * speed;
+
+            // 패들 이동 영향 추가.
+			vel.y += p.GetVelY() * 0.25f;
 
             float minXSpeed = 12.0f;
             if (std::abs(vel.x) < minXSpeed)
                 vel.x = +minXSpeed;
+
+            wallBounceStreak = 0;
 
             ClampBallSpeed(vel, 18.0f, 40.0f);
         }
@@ -235,13 +344,18 @@ void Ball::ResolvePaddleCollision(const Paddle& p)
             float offset = (pos.y - p.GetPos().y) / p.GetHalfH();
             offset = Clamp(offset, -1.0f, 1.0f);
 
-            float angle = offset * (60.0f * 3.141592f / 180.0f);
+            float angle = offset * (50.0f * 3.141592f / 180.0f);
             vel.x = -std::cos(angle) * speed;
             vel.y = std::sin(angle) * speed;
+
+            // 패들 이동 영향 추가.
+            vel.y += p.GetVelY() * 0.25f;
 
             float minXSpeed = 12.0f;
             if (std::abs(vel.x) < minXSpeed)
                 vel.x = -minXSpeed;
+
+            wallBounceStreak = 0;
 
             ClampBallSpeed(vel, 18.0f, 40.0f);
         }

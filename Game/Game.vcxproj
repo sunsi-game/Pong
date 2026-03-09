@@ -93,7 +93,6 @@
     <ClCompile Include="Actor\Ball.cpp" />
     <ClCompile Include="Actor\Paddle.cpp" />
     <ClCompile Include="AI\AStarPositioningAI.cpp" />
-    <ClCompile Include="AI\SimpleTrackerAI.cpp" />
     <ClCompile Include="Common\Types.cpp" />
     <ClCompile Include="Game\Game.cpp" />
     <ClCompile Include="Game\GameManager.cpp" />
