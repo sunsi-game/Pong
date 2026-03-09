@@ -12,39 +12,85 @@ static float Sqrt(float v)
     return std::sqrt(v);
 }
 
+static float Length(const Float2& v)
+{
+    return std::sqrt(v.x * v.x + v.y * v.y);
+}
+
+static void ClampBallSpeed(Float2& v, float minSpeed, float maxSpeed)
+{
+    float len = Length(v);
+    if (len < 0.0001f) return;
+
+    if (len < minSpeed)
+    {
+        float s = minSpeed / len;
+        v.x *= s;
+        v.y *= s;
+    }
+    else if (len > maxSpeed)
+    {
+        float s = maxSpeed / len;
+        v.x *= s;
+        v.y *= s;
+    }
+}
+
+static void EnsureMinHorizontalSpeed(Float2& v, float minXSpeed)
+{
+    if (std::abs(v.x) >= minXSpeed)
+        return;
+
+    // 현재 x 방향 유지
+    float signX = (v.x < 0.0f) ? -1.0f : 1.0f;
+    if (std::abs(v.x) < 0.0001f)
+        signX = 1.0f; // 0이면 기본 오른쪽으로
+
+    v.x = signX * minXSpeed;
+}
+
 void Ball::Reset(const Float2& p, const Float2& dir, float speed)
 {
-	pos = p;
-	vel = { dir.x * speed, dir.y * speed };
+    pos = p;
+    prevPos = p;
+    prevTile = { -999, -999 };
+    vel = { dir.x * speed, dir.y * speed };
 }
 
 void Ball::Tick(float deltaTime, const TileMap& map)
 {
-    // 맵이 아직 로드/초기화 안 된 상태면 타일 충돌 스킵
+    prevPos = pos;
+
     if (map.GetWidth() <= 0 || map.GetHeight() <= 0)
     {
-        // 임시로 월드 반사(혹은 그냥 이동만) - Step A처럼 처리해도 됨
         pos.x += vel.x * deltaTime;
         pos.y += vel.y * deltaTime;
         return;
     }
 
-	Float2 old = pos;
+    Float2 old = pos;
 
-	pos.x += vel.x * deltaTime;
-	pos.y += vel.y * deltaTime;
+    pos.x += vel.x * deltaTime;
+    pos.y += vel.y * deltaTime;
 
-	ResolveTileCollision(map, old);
+    ResolveTileCollision(map, old);
 
-	// 존 적용 (현재 타일의 speedMul).
-	auto t = map.WorldToTile(pos);
-	auto props = map.GetProps(map.GetTile(t.x, t.y));
-	if (!props.isSolid && props.speedMul != 1.0f)
-	{
-		vel.x *= props.speedMul;
-		vel.y *= props.speedMul;
-	}
+    Int2 curT = map.WorldToTile(pos);
+    //auto props = map.GetProps(map.GetTile(curT.x, curT.y));
 
+    if (curT.x != prevTile.x || curT.y != prevTile.y)
+    {
+        auto props = map.GetProps(map.GetTile(curT.x, curT.y));
+        if (!props.isSolid && props.speedMul != 1.0f)
+        {
+            vel.x *= props.speedMul;
+            vel.y *= props.speedMul;
+
+            ClampBallSpeed(vel, 18.0f, 40.0f);
+            EnsureMinHorizontalSpeed(vel, 10.0f);
+        }
+        prevTile = curT;
+    }
 }
 
 void Ball::Tick(float deltaTime, float worldW, float worldH)
@@ -87,6 +133,7 @@ void Ball::ResolveTileCollision(const TileMap& map, const Float2& oldPos)
     const float ts = (float)map.GetTileSize();
 
     for (int ty = tmin.y; ty <= tmax.y; ++ty)
+    {
         for (int tx = tmin.x; tx <= tmax.x; ++tx)
         {
             TileId id = map.GetTile(tx, ty);
@@ -106,20 +153,35 @@ void Ball::ResolveTileCollision(const TileMap& map, const Float2& oldPos)
             if (!AABBOverlap(aMinX, aMinY, aMaxX, aMaxY, bMinX, bMinY, bMaxX, bMaxY))
                 continue;
 
-            // 간단 처리: 이전 위치로 되돌리고 속도 반전(축 판단은 oldPos 기반)
-            // (더 고급으로 하고 싶으면 swept/circle-aabb로 업그레이드하면 됨)
-            pos = oldPos;
+            float dx = std::abs(pos.x - oldPos.x);
+            float dy = std::abs(pos.y - oldPos.y);
 
-            // 어느 축 충돌인지 대충 판정
-            // x 이동이 컸으면 x 반전, y 이동이 컸으면 y 반전
-            float dx = std::abs((oldPos.x + vel.x) - oldPos.x);
-            float dy = std::abs((oldPos.y + vel.y) - oldPos.y);
+            // 아주 살짝 밀어내기 위한 값
+            const float pushEps = 0.05f;
 
-            if (dx >= dy) vel.x = -vel.x * props.restitution;
-            else          vel.y = -vel.y * props.restitution;
+            if (dx >= dy)
+            {
+                // 좌우 충돌
+                pos.x = oldPos.x;
+                vel.x = -vel.x * props.restitution;
 
+                // 반사 방향 쪽으로 살짝 밀기
+                pos.x += (vel.x > 0.0f) ? pushEps : -pushEps;
+            }
+            else
+            {
+                // 상하 충돌
+                pos.y = oldPos.y;
+                vel.y = -vel.y * props.restitution;
+
+                pos.y += (vel.y > 0.0f) ? pushEps : -pushEps;
+            }
+
+            ClampBallSpeed(vel, 18.0f, 40.0f);
+            EnsureMinHorizontalSpeed(vel, 10.0f);
             return;
         }
+    }
 }
 
 void Ball::ResolvePaddleCollision(const Paddle& p)
@@ -151,6 +213,12 @@ void Ball::ResolvePaddleCollision(const Paddle& p)
             float angle = offset * (60.0f * 3.141592f / 180.0f);
             vel.x = +std::cos(angle) * speed;
             vel.y = std::sin(angle) * speed;
+
+            float minXSpeed = 12.0f;
+            if (std::abs(vel.x) < minXSpeed)
+                vel.x = +minXSpeed;
+
+            ClampBallSpeed(vel, 18.0f, 40.0f);
         }
     }
     // 오른쪽 패들 쪽으로 가는 중: 왼쪽 면(pMinX)을 통과했는지
@@ -170,6 +238,12 @@ void Ball::ResolvePaddleCollision(const Paddle& p)
             float angle = offset * (60.0f * 3.141592f / 180.0f);
             vel.x = -std::cos(angle) * speed;
             vel.y = std::sin(angle) * speed;
+
+            float minXSpeed = 12.0f;
+            if (std::abs(vel.x) < minXSpeed)
+                vel.x = -minXSpeed;
+
+            ClampBallSpeed(vel, 18.0f, 40.0f);
         }
     }
 

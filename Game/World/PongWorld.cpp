@@ -24,6 +24,15 @@ namespace KhyPong
         // 타일맵은 콘솔 기준이면 tileSize도 "문자 칸" 단위로 잡는 게 편함.
         map.SetTileSize(1); // 일단 1칸=1타일로 시작 추천 (나중에 2,4로 키워도 됨).
 
+        // UI 상단 2줄 제외한 플레이 영역만.
+        const int uiTopRows = 2;
+
+        // csv 맵로드
+        const int mapW = (int)worldW;
+        const int mapH = (int)worldH;
+
+        map.FillTestMap(mapW, mapH, uiTopRows);
+
 		// 패들 초기화.
 		left.Reset({ 2.0f, worldH * 0.5f});
 		right.Reset({ worldW - 3.0f, worldH * 0.5f });
@@ -33,18 +42,6 @@ namespace KhyPong
 			rightAI = std::make_unique<AStarPositioningAI>();
 		else
 			rightAI = std::make_unique<SimpleTrackerAI>();
-
-        zones.clear();
-
-        // 가운데 슬로우 존 (중앙선 근처 세로 띠)
-        int midX = (int)(worldW * 0.5f);
-        zones.push_back({ midX - 2, 2, midX + 2, (int)worldH - 3, 0.85f, 's' });
-
-        // 왼쪽 스피드 존 (왼쪽 패들 근처)
-        zones.push_back({ 6, 2, 10, (int)worldH - 3, 1.15f, 'f' });
-
-        // 오른쪽 스피드 존 (오른쪽 패들 근처)
-        zones.push_back({ (int)worldW - 11, 2, (int)worldW - 7, (int)worldH - 3, 1.15f, 'f' });
 
 		return true;
 	}
@@ -141,10 +138,10 @@ namespace KhyPong
         if (!waitingServe)
         {
             // 공 업데이트 + 타일 충돌
-            //ball.Tick(dt, map);
+            ball.Tick(dt, map);
             // Step A니까 월드 반사 버전으로!
-            ball.Tick(dt, worldW, worldH);
-            ApplyZonesToBall(dt);
+            //ball.Tick(dt, worldW, worldH);
+            //ApplyZonesToBall(dt);
             ball.ResolvePaddleCollision(left);
             ball.ResolvePaddleCollision(right);
         }
@@ -153,57 +150,62 @@ namespace KhyPong
     
     void PongWorld::HandleSecoreAndReset(float dt)
     {
-        // 이미 경기 끝났으면 3초 카운트 후 메뉴로
+        // 1. 경기 종료 상태
         if (matchEnded)
         {
             endTimer -= dt;
             if (endTimer <= 0.0f)
             {
-                // 메뉴로 돌아가기 요청 (GameManager가 다음 프레임에 레벨 전환)
                 GameManager::Get().RequestGoMenu();
             }
             return;
         }
 
-        // READY 상태면 시간만 깎고 ResetRound
+        // 2. 서브 대기 상태
         if (waitingServe)
         {
             serveTimer -= dt;
             if (serveTimer <= 0.0f)
+            {
                 ResetRound();
+            }
             return;
         }
 
-        // 득점 판정
+        // 3. 득점 판정
+        bool scored = false;
+
         if (ball.GetPos().x < 0.0f)
         {
             rightScore++;
             serveDir = -1;
-            waitingServe = true;
-            serveTimer = 0.7f;
+            scored = true;
         }
         else if (ball.GetPos().x > worldW - 1.0f)
         {
             leftScore++;
             serveDir = +1;
-            waitingServe = true;
-            serveTimer = 0.7f;
+            scored = true;
         }
 
-        // 승리 판정: scoreToWin 도달 시 엔드 상태로
+        if (!scored)
+            return;
+
+        // 4. 승리 판정
         if (leftScore >= scoreToWin || rightScore >= scoreToWin)
         {
             matchEnded = true;
             endTimer = 3.0f;
-
             leftWon = (leftScore >= scoreToWin);
 
-            // 공 멈추고 READY도 끔
             waitingServe = false;
-
-            // (선택) 공을 중앙에 고정해두면 보기 좋음
             ball.Reset({ worldW * 0.5f, worldH * 0.5f }, { 0.0f, 0.0f }, 0.0f);
+            return;
         }
+
+        // 5. 다음 라운드 준비
+        waitingServe = true;
+        serveTimer = 0.7f;
     }
 
     void PongWorld::Draw()
@@ -214,6 +216,13 @@ namespace KhyPong
         static char scoreBuf[64];
         sprintf_s(scoreBuf, "L:%d  R:%d", leftScore, rightScore);
         Renderer::Get().Submit(scoreBuf, Vector2(2, 1), Color::White, 50);
+
+        static char dbg[128];
+        Int2 t = map.WorldToTile(ball.GetPos());
+        sprintf_s(dbg, "tile(%d,%d) id=%d vx=%.2f vy=%.2f",
+            t.x, t.y, (int)map.GetTile(t.x, t.y),
+            ball.GetVel().x, ball.GetVel().y);
+        Renderer::Get().Submit(dbg, Vector2(2, 3), Color::White, 200);
 
         // 중앙선(점선)
         for (int y = 0; y < (int)worldH; ++y)
@@ -226,7 +235,7 @@ namespace KhyPong
         // 공
         int bx = (int)std::round(ball.GetPos().x);
         int by = (int)std::round(ball.GetPos().y);
-        Renderer::Get().Submit("O", Vector2(bx, by), Color::Yellow, 10);
+        Renderer::Get().Submit("O", Vector2(bx, by), Color::Yellow, 100);
 
         // READY
         if (waitingServe)
@@ -246,7 +255,7 @@ namespace KhyPong
                 Vector2((int)(worldW * 0.5f - 9), (int)(worldH * 0.5f + 1)),
                 Color::White, 100);
         }
-
+        
         DrawDebug();
     }
 
@@ -261,21 +270,21 @@ namespace KhyPong
             // 가로줄(예: 4칸마다)
             for (int y = 0; y < h; y += 4)
                 for (int x = 0; x < w; ++x)
-                    Renderer::Get().Submit(".", Vector2(x, y), Color::Green, -10);
+                    Renderer::Get().Submit(".", Vector2(x, y), Color::Green, 70);
 
             // 세로줄(예: 8칸마다)
             for (int x = 0; x < w; x += 8)
                 for (int y = 0; y < h; ++y)
-                    Renderer::Get().Submit(".", Vector2(x, y), Color::Green, -10);
+                    Renderer::Get().Submit(".", Vector2(x, y), Color::Green, 70);
         }
 
-        // 2) 존 표시(슬로우/스피드)
+        // 2) 존 표시(슬로우/스피드).
         if (dbgZones)
         {
-            DrawZonesDebug(); // 아래에서 구현
+            DrawZonesDebug();
         }
 
-        // 3) 공 AABB(대충)
+        // 3) 공 AABB.
         if (dbgBallBox)
         {
             int x0 = (int)std::round(ball.GetPos().x - 1);
@@ -298,18 +307,22 @@ namespace KhyPong
 
     void PongWorld::DrawZonesDebug()
     {
-        for (const auto& z : zones)
-        {
-            for (int y = z.y0; y <= z.y1; ++y)
+        const int w = map.GetWidth();
+        const int h = map.GetHeight();
+        if (w <= 0 || h <= 0) return;
+
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
             {
-                for (int x = z.x0; x <= z.x1; ++x)
-                {
-                    const char* ch = (z.debugChar == 's') ? "s" : "f";
-                    Color c = (z.debugChar == 's') ? Color::Blue : Color::Green;
-                    Renderer::Get().Submit(ch, Vector2(x, y), c, -20);
-                }
+                TileId id = map.GetTile(x, y);
+
+                if (id == TileId::SolidWall)
+                    Renderer::Get().Submit("#", Vector2(x, y), Color::White, 80);
+                else if (id == TileId::SlowZone)
+                    Renderer::Get().Submit("s", Vector2(x, y), Color::Blue, 80);
+                else if (id == TileId::SpeedZone)
+                    Renderer::Get().Submit("f", Vector2(x, y), Color::Green, 80);
             }
-        }
     }
 
     void PongWorld::ApplyZonesToBall(float deltaTime)

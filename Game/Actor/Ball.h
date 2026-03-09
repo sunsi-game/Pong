@@ -21,7 +21,8 @@ private :
 	Float2 prevPos{ 0,0 };
 	Float2 pos{ 0,0 };
 	Float2 vel{ 0,0 };
-	float radius = 3.0f;
+	float radius = 2.0f;
+	Int2 prevTile{ -999, -999 };
 
 private : 
 	void ResolveTileCollision(const TileMap& map, const Float2& oldPos);

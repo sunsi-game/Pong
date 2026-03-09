@@ -19,6 +19,9 @@ public :
 
 	Int2 WorldToTile(const Float2& p) const;
 
+	bool LoadFromCSV(const char* path, int w, int h);
+	void FillTestMap(int w, int h, int uiTopRows = 2);
+
 private :
 	int width = 0;
 	int height = 0;
