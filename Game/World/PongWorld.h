@@ -1,22 +1,22 @@
 #pragma once
 #include <memory>
+#include <vector>
 
 #include "World/TileMap.h"
 #include "Actor/Ball.h"
 #include "Actor/Paddle.h"
 #include "AI/IPaddleAI.h"
+#include "ISpatialIndex.h"
 
-// 맵은 타일 데이터로 유지.
-// 공은 연속좌표 (벡터).
-// 충돌 후보는 공 주변 타일만 검사.
-// AI는 (simple / A*) 선택.
-
+class Obstacle;
+class PowerUp;
 
 namespace KhyPong
 {
 	class PongWorld
 	{
-	public :
+	public:
+		~PongWorld();
 		bool Init();
 		void ResetRound();
 
@@ -29,22 +29,48 @@ namespace KhyPong
 		void HandleSecoreAndReset(float deltaTime);
 		void DrawDebug();
 		void DrawZonesDebug();
-		void ApplyZonesToBall(float deltaTime);
+		void ApplyZonesToBall(Ball& ball, float deltaTime);
 
+		// Step D
+		void UpdateRoundTimer(float deltaTime);
+		void UpdateBalls(float deltaTime);
+		void UpdateBall(Ball& ball, float deltaTime);
+		void RebuildSpatialIndex();
+		void ToggleSpatialIndexMode();
+
+		void SpawnBall(const Float2& pos, const Float2& dir, float speed);
+		void SpawnTimedMultiBall();
+		bool ShouldSpawnTimedMultiBall() const;
+
+		bool IntersectsBallAABB(const Ball& ball, float left, float top, float right, float bottom) const;
+		void ResolveBallVsObstacle(Ball& ball, const Obstacle& obstacle);
+		bool CheckBallVsPowerUp(const Ball& ball, const PowerUp& powerUp) const;
+		void ApplyPowerUp(Ball& ball, const PowerUp& powerUp);
+
+		void BuildStepDObjects();
 
 	private:
-
 		struct ZoneRect
 		{
-			int x0, y0, x1, y1; // 포함 범위
-			float speedMul;     // 0.8 슬로우 / 1.2 스피드
-			char debugChar;     // 표시용
+			int x0, y0, x1, y1;
+			float speedMul;
+			char debugChar;
+		};
+
+		enum class SpatialIndexMode
+		{
+			None,
+			Quadtree
 		};
 
 		std::vector<ZoneRect> zones;
 
 		TileMap map;
+
+		// 기존 단일 공은 유지하고, 실제 플레이는 balls로 확장.
 		Ball ball;
+		std::vector<Ball> balls;
+
 		Paddle left;
 		Paddle right;
 
@@ -52,32 +78,45 @@ namespace KhyPong
 		int rightScore = 0;
 		int scoreToWin = 5;
 
-		// 누가 서브를 할지.
-		int serveDir = 1; // 1이면 오른쪽으로, -1이면 왼쪽으로 서브.
+		int serveDir = 1;
 
-		// AI (오른쪽 패들 예시).
 		std::unique_ptr<IPaddleAI> rightAI;
 
-		// 옵션.
 		bool useAStarAI = true;
-		bool multiBallMode = false; // 확장 모드 자리.
+		bool multiBallMode = false;
 
-		// 월드 크기 (픽셀 기준).
 		float worldW = 0.0f;
 		float worldH = 0.0f;
 
-		float serveTimer = 0.0f; // 서브 타이머 (공이 잠시 멈춰있는 시간).
-		bool waitingServe = false; // 서브 대기 상태 여부.
+		float serveTimer = 0.0f;
+		bool waitingServe = false;
 
 		bool matchEnded = false;
 		float endTimer = 0.0f;
-		bool leftWon = false; // true면 왼쪽 승, false면 오른쪽 승
+		bool leftWon = false;
 
-		bool dbgGrid = false;      // F2: 타일 그리드
-		bool dbgBallBox = false;   // F4: 공 AABB/검사 영역
-		bool dbgZones = false;     // F3: 존 표시(스피드/슬로우)
+		bool dbgGrid = false;
+		bool dbgBallBox = false;
+		bool dbgZones = false;
+		bool dbgPath = false;
 
-		bool dbgPath = false; // 경로 표시/
+		// Step D
+		SpatialIndexMode spatialMode = SpatialIndexMode::None;
+		std::unique_ptr<ISpatialIndex> spatialIndex;
+
+		std::vector<std::unique_ptr<Obstacle>> obstacles;
+		std::vector<std::unique_ptr<PowerUp>> powerUps;
+
+		float roundTimeLimit = 35.0f;
+		float roundTimeRemaining = 35.0f;
+		bool roundEnded = false;
+		int timedMultiBallStage = 0; // 20 / 15 / 10 / 5초
+		int maxBalls = 8;
+
+		int bruteForceChecks = 0;
+		int spatialCandidateChecks = 0;
+		int actualCollisionCount = 0;
+		int obstacleCandidateCount = 0;
+		int powerUpCandidateCount = 0;
 	};
 }
-

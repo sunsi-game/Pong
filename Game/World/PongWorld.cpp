@@ -1,3 +1,6 @@
+#include <cmath>
+#include <cstdlib>
+#include <algorithm>
 #include "PongWorld.h"
 #include "Engine/Engine.h"
 #include "Core/Input.h"
@@ -5,12 +8,22 @@
 #include "Render/Renderer.h"
 #include "Math/Vector2.h"
 #include "Game/GameManager.h"
+#include "Common/Common.h"
 
 #include "AI/SimpleTrackerAI.h"
 #include "AI/AStarPositioningAI.h"
 
+#include "Obstacle.h"
+#include "PowerUp.h"
+#include "ISpatialIndex.h"
+#include "SpatialIndex_None.h"
+#include "SpatialIndex_QuadtreeAdapter.h"
+
+
 namespace KhyPong
 {
+    PongWorld::~PongWorld() = default;
+
     bool PongWorld::Init()
     {
         // 엔진 설정값 기준으로 월드 사이즈 결정.
@@ -43,6 +56,15 @@ namespace KhyPong
         else
             rightAI = std::make_unique<SimpleTrackerAI>();
 
+        spatialIndex = std::make_unique<SpatialIndex_None>();
+
+        BuildStepDObjects();
+        ResetRound();
+
+        matchEnded = false;
+        roundEnded = false;
+        waitingServe = false;
+
         return true;
     }
 
@@ -63,17 +85,39 @@ namespace KhyPong
 
         float angleRad = angleDeg * 3.14159265f / 180.0f;
 
-        Float2 dir;
+        Float2 dir(0,0);
         dir.x = (float)serveDir * std::cos(angleRad);
         dir.y = std::sin(angleRad);
 
         ball.Reset(center, dir, 30.0f);
+        ball.SetPos(center);
+        balls.clear();
+        balls.push_back(ball);
 
-        left.Reset({ 2.0f,  worldH * 0.5f });
-        right.Reset({ worldW - 3.0f, worldH * 0.5f });
+
+        left.SetPos({ 2.0f,  worldH * 0.5f });
+        right.SetPos({ worldW - 3.0f, worldH * 0.5f });
+        
 
         waitingServe = false;
         serveTimer = 0.0f;
+
+        roundTimeLimit = 35.0f;
+        roundTimeRemaining = 35.0f;
+        roundEnded = false;
+        timedMultiBallStage = 0;
+
+        bruteForceChecks = 0;
+        spatialCandidateChecks = 0;
+        actualCollisionCount = 0;
+        obstacleCandidateCount = 0;
+        powerUpCandidateCount = 0;
+
+        matchEnded = false;
+        leftWon = false;
+        endTimer = 0.0f;
+
+        RebuildSpatialIndex();
     }
 
     void PongWorld::Tick(float deltaTime)
@@ -102,10 +146,12 @@ namespace KhyPong
 
         left.SetMoveInput(move);
 
+        const Ball* targetBall = balls.empty() ? &ball : &balls.front();
         // 오른쪽 패들 : AI.
-        if (rightAI)
+        if (rightAI && targetBall)
         {
-            PaddleInput aiIn = rightAI->Update(dt, map, right.GetPos(), ball.GetPos(), ball.GetVel());
+            //PaddleInput aiIn = rightAI->Update(dt, map, right.GetPos(), ball.GetPos(), ball.GetVel());
+            PaddleInput aiIn = rightAI->Update(dt, map, right.GetPos(), targetBall->GetPos(), targetBall->GetVel());
             right.SetMoveInput(aiIn.moveY);
         }
 
@@ -138,31 +184,37 @@ namespace KhyPong
         // F4공 AABB/검사 영역.
         if (Input::Get().GetKeyDown(VK_F4)) dbgBallBox = !dbgBallBox;
 
-        if (Input::Get().GetKeyDown('V'))
-        {
-            dbgPath = !dbgPath;
-        }
+        if (Input::Get().GetKeyDown(VK_F5)) ToggleSpatialIndexMode();
+
+        if (Input::Get().GetKeyDown('V')) dbgPath = !dbgPath;
+
     }
 
     void PongWorld::UpdateGameplay(float dt)
     {
         if (matchEnded) return; // 경기 끝나면 움직임 중지
+        if (roundEnded) return;
 
         // 패들 업데이트(클램프 포함)
         left.Tick(dt, worldH);
         right.Tick(dt, worldH);
 
+        UpdateRoundTimer(dt); // 추가.
 
         if (!waitingServe)
         {
             // 공 업데이트 + 타일 충돌
-            ball.Tick(dt, map);
+            //ball.Tick(dt, map);
             // Step A니까 월드 반사 버전으로!
             //ball.Tick(dt, worldW, worldH);
             //ApplyZonesToBall(dt);
-            ball.ResolvePaddleCollision(left);
-            ball.ResolvePaddleCollision(right);
+            //ball.ResolvePaddleCollision(left);
+            //ball.ResolvePaddleCollision(right);
+            UpdateRoundTimer(dt);
+            UpdateBalls(dt);
         }
+
+        RebuildSpatialIndex();
     }
 
 
@@ -193,17 +245,21 @@ namespace KhyPong
         // 3. 득점 판정
         bool scored = false;
 
-        if (ball.GetPos().x < 0.0f)
-        {
-            rightScore++;
-            serveDir = -1;
-            scored = true;
-        }
-        else if (ball.GetPos().x > worldW - 1.0f)
-        {
-            leftScore++;
-            serveDir = +1;
-            scored = true;
+        for (Ball& curBall : balls) {
+            if (curBall.GetPos().x < 0.0f)
+            {
+                rightScore++;
+                serveDir = -1;
+                scored = true;
+                break;
+            }
+            else if (curBall.GetPos().x > worldW - 1.0f)
+            {
+                leftScore++;
+                serveDir = +1;
+                scored = true;
+                break;
+            }
         }
 
         if (!scored)
@@ -217,6 +273,7 @@ namespace KhyPong
             leftWon = (leftScore >= scoreToWin);
 
             waitingServe = false;
+            balls.clear();
             ball.Reset({ worldW * 0.5f, worldH * 0.5f }, { 0.0f, 0.0f }, 0.0f);
             return;
         }
@@ -232,17 +289,22 @@ namespace KhyPong
 
         // 점수
         static char scoreBuf[64];
-        sprintf_s(scoreBuf, "L:%d  R:%d", leftScore, rightScore);
+        sprintf_s(scoreBuf, "Player:%d  AI:%d", leftScore, rightScore);
         Renderer::Get().Submit(scoreBuf, Vector2(2, 1), Color::White, 50);
+        char timeBuf[64];
+        sprintf_s(timeBuf, "Time: %d", (int)roundTimeRemaining);
+        Renderer::Get().Submit(timeBuf, Vector2(2, 3), Color::White, 50);
+
 
         // 키 옵션 안내.
-        static char optionBuf[160];
-        sprintf_s(optionBuf, "F1: AI %s | F2: Grid %s | F3: Zones %s | F4: BallBox %s | V: Path %s",
+        static char optionBuf[220];
+        sprintf_s(optionBuf, "F1: AI %s | F2: Grid %s | F3: Zones %s | F4: BallBox %s | V: Path %s | F5: Spatial %s",
             useAStarAI ? "A*" : "Simple",
             dbgGrid ? "ON" : "OFF",
             dbgZones ? "ON" : "OFF",
             dbgBallBox ? "ON" : "OFF",
-            dbgPath ? "ON" : "OFF");
+            dbgPath ? "ON" : "OFF",
+            (spatialMode == SpatialIndexMode::None) ? "None" : "Quadtree");
         Renderer::Get().Submit(optionBuf, Vector2(2, 2), Color::White, 40);
 
         // 중앙선(점선)
@@ -254,9 +316,19 @@ namespace KhyPong
         right.Draw();
 
         // 공
-        int bx = (int)std::round(ball.GetPos().x);
-        int by = (int)std::round(ball.GetPos().y);
-        Renderer::Get().Submit("O", Vector2(bx, by), Color::Yellow, 100);
+        for (const Ball& curBall : balls)
+        {
+            int bx = (int)std::round(curBall.GetPos().x);
+            int by = (int)std::round(curBall.GetPos().y);
+            Renderer::Get().Submit("O", Vector2(bx, by), Color::Yellow, 100);
+        }
+
+        // Obstacle / PowerUp
+        for (const auto& obstacle : obstacles)
+            obstacle->Draw();
+
+        for (const auto& powerUp : powerUps)
+            powerUp->Draw();
 
         // READY
         if (waitingServe)
@@ -275,6 +347,13 @@ namespace KhyPong
             Renderer::Get().Submit(tbuf,
                 Vector2((int)(worldW * 0.5f - 9), (int)(worldH * 0.5f + 1)),
                 Color::White, 100);
+        }
+
+        if (roundEnded)
+        {
+            Renderer::Get().Submit("ROUND TIME OVER",
+                Vector2((int)(worldW * 0.5f - 7), (int)(worldH * 0.5f - 3)),
+                Color::Red, 100);
         }
 
         if (dbgPath && useAStarAI && rightAI)
@@ -328,12 +407,19 @@ namespace KhyPong
         }
 
         // 3) 공 AABB.
-        if (dbgBallBox)
+        if (dbgBallBox && !balls.empty())
         {
-            int x0 = (int)std::round(ball.GetPos().x - 1);
+            /*int x0 = (int)std::round(ball.GetPos().x - 1);
             int x1 = (int)std::round(ball.GetPos().x + 1);
             int y0 = (int)std::round(ball.GetPos().y - 1);
-            int y1 = (int)std::round(ball.GetPos().y + 1);
+            int y1 = (int)std::round(ball.GetPos().y + 1);*/
+
+            const Ball& target = balls.front();
+
+            int x0 = (int)std::round(target.GetPos().x - 1);
+            int x1 = (int)std::round(target.GetPos().x + 1);
+            int y0 = (int)std::round(target.GetPos().y - 1);
+            int y1 = (int)std::round(target.GetPos().y + 1);
 
             for (int x = x0; x <= x1; ++x)
             {
@@ -376,27 +462,337 @@ namespace KhyPong
     
 
 
-    void PongWorld::ApplyZonesToBall(float deltaTime)
+    void PongWorld::ApplyZonesToBall(Ball& targetBall, float deltaTime)
     {
         {
             // 공이 존에 들어갈 때만 '한 번' 적용하면 제일 좋지만,
             // Step A에서는 간단히 "들어가 있는 동안" 약하게 적용하자.
-            int bx = (int)std::round(ball.GetPos().x);
-            int by = (int)std::round(ball.GetPos().y);
+            /*int bx = (int)std::round(ball.GetPos().x);
+            int by = (int)std::round(ball.GetPos().y);*/
+
+            int bx = (int)std::round(targetBall.GetPos().x);
+            int by = (int)std::round(targetBall.GetPos().y);
 
             for (const auto& z : zones)
             {
                 if (bx >= z.x0 && bx <= z.x1 && by >= z.y0 && by <= z.y1)
                 {
                     // 너무 과하게 누적되면 속도가 폭주하니까, dt 기반으로 아주 약하게
-                    Float2 v = ball.GetVel();
+                    Float2 v = targetBall.GetVel();
                     v.x *= std::pow(z.speedMul, deltaTime * 6.0f); // dt 보정 (대충 6은 체감 튜닝값)
                     v.y *= std::pow(z.speedMul, deltaTime * 6.0f);
-                    ball.SetVel(v); // Ball에 setter 추가 필요(아래 참고)
+                    targetBall.SetVel(v); // Ball에 setter 추가 필요(아래 참고)
                     return;
                 }
             }
         }
     }
 
+    void PongWorld::UpdateRoundTimer(float deltaTime)
+    {
+        if (roundEnded || matchEnded)
+            return;
+
+        roundTimeRemaining -= deltaTime;
+
+        if (roundTimeRemaining < 0.0f)
+            roundTimeRemaining = 0.0f;
+
+        if (ShouldSpawnTimedMultiBall())
+        {
+            SpawnTimedMultiBall();
+        }
+
+        if (roundTimeRemaining <= 0.0f)
+        {
+            roundEnded = true;
+        }
+    }
+
+    bool PongWorld::ShouldSpawnTimedMultiBall() const
+    {
+        if ((int)balls.size() >= maxBalls)
+            return false;
+
+        if (timedMultiBallStage == 0 && roundTimeRemaining <= 20.0f) return true;
+        if (timedMultiBallStage == 1 && roundTimeRemaining <= 15.0f) return true;
+        if (timedMultiBallStage == 2 && roundTimeRemaining <= 10.0f) return true;
+        if (timedMultiBallStage == 3 && roundTimeRemaining <= 5.0f)  return true;
+
+        return false;
+    }
+    void PongWorld::SpawnBall(const Float2& pos, const Float2& dir, float speed)
+    {
+        Ball newBall;
+        newBall.Reset(pos, dir, speed);
+        balls.push_back(newBall);
+    }
+
+    void PongWorld::SpawnTimedMultiBall()
+    {
+        if ((int)balls.size() >= maxBalls)
+            return;
+
+        if (balls.empty())
+        {
+            Float2 pos;
+            pos.x = worldW * 0.5f;
+            pos.y = worldH * 0.5f;
+
+            Float2 dir;
+            dir.x = 1.0f;
+            dir.y = -0.3f;
+
+            SpawnBall(pos, dir, 18.0f);
+            ++timedMultiBallStage;
+            return;
+        }
+
+        const Ball& baseBall = balls.front();
+        Float2 dir = baseBall.GetVel();
+
+        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (len > 0.0001f)
+        {
+            dir.x /= len;
+            dir.y /= len;
+        }
+        else
+        {
+            dir.x = 1.0f;
+            dir.y = 0.0f;
+        }
+
+        switch (timedMultiBallStage)
+        {
+        case 0: // 20초
+            dir.x = -dir.x;
+            dir.y *= 0.85f;
+            break;
+
+        case 1: // 15초
+            dir.y = -dir.y;
+            break;
+
+        case 2: // 10초
+            dir.x = -dir.x;
+            dir.y = -dir.y * 0.9f;
+            break;
+
+        case 3: // 5초
+            dir.x *= 1.05f;
+            dir.y = -dir.y;
+            break;
+        }
+
+        Float2 vel = baseBall.GetVel();
+        float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        if (speed < 0.0001f)
+            speed = 18.0f;
+
+        SpawnBall(baseBall.GetPos(), dir, speed);
+        ++timedMultiBallStage;
+    }
+
+    void PongWorld::UpdateBalls(float deltaTime)
+    {
+        bruteForceChecks = 0;
+        spatialCandidateChecks = 0;
+        actualCollisionCount = 0;
+        obstacleCandidateCount = 0;
+        powerUpCandidateCount = 0;
+
+        const size_t initialCount = balls.size();
+        for (size_t i = 0; i < initialCount; ++i)
+        {
+            UpdateBall(balls[i], deltaTime);
+        }
+    }
+
+    void PongWorld::UpdateBall(Ball& curBall, float deltaTime)
+    {
+        curBall.Tick(deltaTime, map);
+        curBall.ResolvePaddleCollision(left);
+        curBall.ResolvePaddleCollision(right);
+        ApplyZonesToBall(curBall, deltaTime);
+
+        QueryAABB area;
+        const Float2 p = curBall.GetPos();
+        const float r = curBall.GetRadius();
+
+        area.left = p.x - r - 2.0f;
+        area.top = p.y - r - 2.0f;
+        area.right = p.x + r + 2.0f;
+        area.bottom = p.y + r + 2.0f;
+
+        SpatialQueryResult result;
+        spatialIndex->Query(area, result);
+
+        obstacleCandidateCount += (int)result.obstacles.size();
+        powerUpCandidateCount += (int)result.powerUps.size();
+
+        for (Obstacle* obstacle : result.obstacles)
+        {
+            ++spatialCandidateChecks;
+            ResolveBallVsObstacle(curBall, *obstacle);
+        }
+
+        for (PowerUp* powerUp : result.powerUps)
+        {
+            ++spatialCandidateChecks;
+            if (CheckBallVsPowerUp(curBall, *powerUp))
+            {
+                ApplyPowerUp(curBall, *powerUp);
+                ++actualCollisionCount;
+            }
+        }
+
+        bruteForceChecks += (int)(obstacles.size() + powerUps.size());
+    }
+
+    void PongWorld::RebuildSpatialIndex()
+    {
+        if (!spatialIndex)
+            return;
+
+        spatialIndex->Clear();
+
+        for (auto& obstacle : obstacles)
+            spatialIndex->InsertObstacle(obstacle.get());
+
+        for (auto& powerUp : powerUps)
+            spatialIndex->InsertPowerUp(powerUp.get());
+    }
+
+    void PongWorld::ToggleSpatialIndexMode()
+    {
+        if (spatialMode == SpatialIndexMode::None)
+        {
+            spatialMode = SpatialIndexMode::Quadtree;
+            spatialIndex = std::make_unique<SpatialIndex_QuadtreeAdapter>(worldW, worldH, 5, 4);
+        }
+        else
+        {
+            spatialMode = SpatialIndexMode::None;
+            spatialIndex = std::make_unique<SpatialIndex_None>();
+        }
+
+        RebuildSpatialIndex();
+    }
+
+    void PongWorld::BuildStepDObjects()
+    {
+        obstacles.clear();
+        powerUps.clear();
+
+        const float cx = worldW * 0.5f;
+        const float cy = worldH * 0.5;
+
+        // 좌상
+        obstacles.push_back(std::make_unique<Obstacle>(
+            Float2(cx - 10.0f, cy - 6.0f),
+            Float2(2.0f, 1.0f)
+        ));
+
+
+        // 우하
+        obstacles.push_back(std::make_unique<Obstacle>(
+            Float2(cx + 7.0f, cy + 4.0f),
+            Float2(1.0f, 3.0f)
+        ));
+
+        powerUps.push_back(std::make_unique<PowerUp>(Float2{ worldW * 0.5f - 8.0f, worldH * 0.5f - 4.0f }, PowerUpType::MultiBall));
+        powerUps.push_back(std::make_unique<PowerUp>(Float2{ worldW * 0.5f + 6.0f, worldH * 0.5f + 3.0f }, PowerUpType::BallSpeedUp));
+    }
+
+    bool PongWorld::IntersectsBallAABB(const Ball& ball, float left, float top, float right, float bottom) const
+    {
+        const Float2& p = ball.GetPos();
+        const float r = ball.GetRadius();
+
+        const float closestX = (std::max)(left, (std::min)(p.x, right));
+        const float closestY = (std::max)(top, (std::min)(p.y, bottom));
+
+        const float dx = p.x - closestX;
+        const float dy = p.y - closestY;
+
+        return (dx * dx + dy * dy) <= (r * r);
+    }
+
+    void PongWorld::ResolveBallVsObstacle(Ball& ball, const Obstacle& obstacle)
+    {
+        if (!IntersectsBallAABB(ball,
+            obstacle.GetLeft(),
+            obstacle.GetTop(),
+            obstacle.GetRight(),
+            obstacle.GetBottom()))
+        {
+            return;
+        }
+
+        const Float2 p = ball.GetPos();
+        const float r = ball.GetRadius();
+
+        const float overlapLeft = std::abs((p.x + r) - obstacle.GetLeft());
+        const float overlapRight = std::abs(obstacle.GetRight() - (p.x - r));
+        const float overlapTop = std::abs((p.y + r) - obstacle.GetTop());
+        const float overlapBottom = std::abs(obstacle.GetBottom() - (p.y - r));
+
+        const float minX = (std::min)(overlapLeft, overlapRight);
+        const float minY = (std::min)(overlapTop, overlapBottom);
+
+        if (minX < minY) ball.ReflectX();
+        else             ball.ReflectY();
+
+        ++actualCollisionCount;
+    }
+
+    bool PongWorld::CheckBallVsPowerUp(const Ball& ball, const PowerUp& powerUp) const
+    {
+        if (!powerUp.IsActive())
+            return false;
+
+        return IntersectsBallAABB(ball,
+            powerUp.GetLeft(),
+            powerUp.GetTop(),
+            powerUp.GetRight(),
+            powerUp.GetBottom());
+    }
+    void PongWorld::ApplyPowerUp(Ball& ball, const PowerUp& powerUp)
+    {
+        switch (powerUp.GetTypes())
+        {
+        case PowerUpType::MultiBall:
+           {
+            if ((int)balls.size() < maxBalls)
+            {
+                Float2 v = ball.GetVel();
+                float len = std::sqrt(v.x * v.x + v.y * v.y);
+
+                Float2 dir(0,0);
+                if (len > 0.0001f)
+                {
+                    dir.x = -v.x / len;
+                    dir.y = v.y / len;
+                }
+                else
+                {
+                    dir = { -1.0f, 0.2f };
+                    len = 18.0f;
+                }
+
+                SpawnBall(ball.GetPos(), dir, len);
+            }
+            break;
+        }
+        case PowerUpType::BallSpeedUp:
+            ball.MultiplySpeed(1.2f);
+            break;
+
+        case PowerUpType::PaddleExpand:
+            break;
+        }
+
+        const_cast<PowerUp&>(powerUp).Consume();
+    }
 }

@@ -362,3 +362,19 @@ void Ball::ResolvePaddleCollision(const Paddle& p)
     }
 
 }
+
+void Ball::ReflectX()
+{
+    vel.x = -vel.x;
+}
+
+void Ball::ReflectY()
+{
+    vel.y = -vel.y;
+}
+
+void Ball::MultiplySpeed(float scale)
+{
+    vel.x *= scale;
+    vel.y *= scale;
+}

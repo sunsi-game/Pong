@@ -2,6 +2,8 @@
 #include "Common/Types.h"
 #include "World/TileMap.h"
 #include "Paddle.h"
+#include "World/Obstacle.h"
+#include "World/PowerUp.h"
 
 class Ball
 {
@@ -17,6 +19,13 @@ public :
 
 	inline void SetVel(const Float2& newVel) { vel = newVel; }
 	inline int GetGimmickLoopStreak() const { return gimmickLoopStreak;  }
+	inline float GetRadius() const { return radius; }
+
+	inline void SetPos(const Float2& p) { pos = p; }
+
+	void ReflectX();
+	void ReflectY();
+	void MultiplySpeed(float scale);
 
 private :
 	Float2 prevPos{ 0,0 };

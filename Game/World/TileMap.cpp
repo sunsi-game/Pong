@@ -84,7 +84,7 @@ TileProps TileMap::GetProps(TileId id) const
 			break;
 		case TileId::SoftWall:
 			p.isSolid = false;
-			p.speedMul = 0.5f;
+			p.speedMul = 0.75f;
 			p.restitution = 1.0f;
 			p.extraCost = 10; // A*에서 높은 비용.
 			break;
@@ -98,21 +98,21 @@ TileProps TileMap::GetProps(TileId id) const
 		case TileId::WindRight:
 			p.isSolid = false;
 			p.speedMul = 1.0f;
-			p.force = { 6.0f, 0.0f };
+			p.force = { 8.0f, 0.0f };
 			p.extraCost = 1;
 			break;
 
 		case TileId::WindLeft:
 			p.isSolid = false;
-			p.speedMul = 1.0f;
-			p.force = { -6.0f, 0.0f };
+			p.speedMul = 1.6f;
+			p.force = { -8.0f, 0.0f };
 			p.extraCost = 1;
 			break;
 
 		case TileId::Bumper:
 			p.isSolid = false;
 			p.speedMul = 1.0f;
-			p.restitution = 1.25f;
+			p.restitution = 1.5f;
 			p.extraCost = 20;
 			break;
 		default :

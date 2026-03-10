@@ -14,4 +14,7 @@ struct Float2
 {
 	float x;
 	float y;
+
+	Float2() : x(0.0f), y(0.0f) {}
+	Float2(float inX, float inY) : x(inX), y(inY) {}
 };

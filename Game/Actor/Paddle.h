@@ -16,6 +16,8 @@ public :
 	inline float GetHalfH() const { return halfH; }
 	inline float GetVelY() const { return velY; }
 
+	inline void SetPos(const Float2& p) { pos = p; }
+
 private :
 	Float2 pos{ 0,0 };
 	float moveInput = 0.0f;
