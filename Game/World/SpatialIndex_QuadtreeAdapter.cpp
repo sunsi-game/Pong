@@ -1,6 +1,6 @@
 #include "SpatialIndex_QuadtreeAdapter.h"
-#include "Obstacle.h"
-#include "PowerUp.h"
+#include "Actor/Obstacle.h"
+#include "Actor/PowerUp.h"
 
 SpatialIndex_QuadtreeAdapter::SpatialIndex_QuadtreeAdapter(float inWorldWidth, float inWorldHeight, int inMaxDepth, int inCapacity)
     : worldWidth(inWorldWidth), worldHeight(inWorldHeight), maxDepth(inMaxDepth), capacity(inCapacity)

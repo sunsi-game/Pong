@@ -2,8 +2,8 @@
 #include "Common/Types.h"
 #include "World/TileMap.h"
 #include "Paddle.h"
-#include "World/Obstacle.h"
-#include "World/PowerUp.h"
+#include "Obstacle.h"
+#include "PowerUp.h"
 
 class Ball
 {

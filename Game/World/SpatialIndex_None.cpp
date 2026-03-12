@@ -1,6 +1,6 @@
-#include "SpatialIndex_None.h"	
-#include "Obstacle.h"
-#include "PowerUp.h"
+#include "SpatialIndex_None.h"
+#include "Actor/Obstacle.h"
+#include "Actor/PowerUp.h"
 
 void SpatialIndex_None::Clear()
 {

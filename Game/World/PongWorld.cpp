@@ -13,8 +13,8 @@
 #include "AI/SimpleTrackerAI.h"
 #include "AI/AStarPositioningAI.h"
 
-#include "Obstacle.h"
-#include "PowerUp.h"
+#include "Actor/Obstacle.h"
+#include "Actor/PowerUp.h"
 #include "ISpatialIndex.h"
 #include "SpatialIndex_None.h"
 #include "SpatialIndex_QuadtreeAdapter.h"

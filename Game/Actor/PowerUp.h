@@ -1,8 +1,8 @@
 #pragma once
 #include "Actor/Actor.h"
 #include "Math/Vector2.h"
-#include "PongCollisionTypes.h"
-#include "SpatialMath.h"
+#include "World/PongCollisionTypes.h"
+#include "World/SpatialMath.h"
 #include "Common/Types.h"
 #include "Render/Renderer.h"
 

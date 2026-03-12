@@ -51,10 +51,10 @@
     <ClCompile Include="AI\AStarPositioningAI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="World\Obstacle.cpp">
+    <ClCompile Include="Actor\Obstacle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="World\PowerUp.cpp">
+    <ClCompile Include="Actor\PowerUp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="World\SpatialIndex_None.cpp">
@@ -116,10 +116,10 @@
     <ClInclude Include="World\PongCollisionTypes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="World\Obstacle.h">
+    <ClInclude Include="Actor\Obstacle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="World\PowerUp.h">
+    <ClInclude Include="Actor\PowerUp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="World\ISpatialIndex.h">

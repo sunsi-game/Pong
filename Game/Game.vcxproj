@@ -101,9 +101,9 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="World\SpatialIndex_None.cpp" />
     <ClCompile Include="Util\Timer.cpp" />
-    <ClCompile Include="World\Obstacle.cpp" />
+    <ClCompile Include="Actor\Obstacle.cpp" />
     <ClCompile Include="World\PongWorld.cpp" />
-    <ClCompile Include="World\PowerUp.cpp" />
+    <ClCompile Include="Actor\PowerUp.cpp" />
     <ClCompile Include="World\SpatialIndex_QuadtreeAdapter.cpp" />
     <ClCompile Include="World\TileMap.cpp" />
   </ItemGroup>
@@ -123,10 +123,10 @@
     <ClInclude Include="Util\MathUtil.h" />
     <ClInclude Include="Util\Timer.h" />
     <ClInclude Include="World\ISpatialIndex.h" />
-    <ClInclude Include="World\Obstacle.h" />
+    <ClInclude Include="Actor\Obstacle.h" />
     <ClInclude Include="World\PongCollisionTypes.h" />
     <ClInclude Include="World\PongWorld.h" />
-    <ClInclude Include="World\PowerUp.h" />
+    <ClInclude Include="Actor\PowerUp.h" />
     <ClInclude Include="World\SpatialIndex_QuadtreeAdapter.h" />
     <ClInclude Include="World\SpatialMath.h" />
     <ClInclude Include="World\TileMap.h" />
